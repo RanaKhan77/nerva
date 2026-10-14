@@ -35,8 +35,10 @@ const verifoneCommanderFixture = `<!DOCTYPE html>
 const ingenicoTeliumFixture = `<!DOCTYPE html>
 <html><head><title>Ingenico Telium</title></head>
 <body>
-<p>Ingenico Group — Telium terminal management</p>
-<p>iCT220</p>
+<form method="post" action="/login">
+<label>Username</label><input name="user">
+<label>Password</label><input type="password" name="password">
+</form>
 </body></html>`
 
 const genericApacheFixture = `<!DOCTYPE html>
@@ -60,7 +62,8 @@ func TestIngenicoFingerprinter_Name(t *testing.T) {
 func TestVerifoneFingerprinter_Match(t *testing.T) {
 	fp := &VerifoneFingerprinter{}
 	assert.True(t, fp.Match(htmlResp(200, "")))
-	assert.True(t, fp.Match(htmlResp(404, "")))
+	assert.False(t, fp.Match(htmlResp(401, "")))
+	assert.False(t, fp.Match(htmlResp(404, "")))
 	assert.False(t, fp.Match(&http.Response{StatusCode: 200, Header: http.Header{"Content-Type": []string{"application/json"}}}))
 	assert.False(t, fp.Match(&http.Response{StatusCode: 500, Header: http.Header{"Content-Type": []string{"text/html"}}}))
 }
@@ -125,13 +128,13 @@ func TestPOSPOI_GenericHTTPDoesNotEmit(t *testing.T) {
 }
 
 func TestPOSPOI_MarketingPageWithoutManagementMarkersDoesNotMatch(t *testing.T) {
-	// A page that merely mentions the vendor is not a management identity.
-	body := []byte(`<html><head><title>News</title></head><body>We bought a Verifone and an Ingenico terminal.</body></html>`)
-	resp := htmlResp(200, string(body))
-	v, err := (&VerifoneFingerprinter{}).Fingerprint(resp, body)
+	copyrightOnly := []byte(`<html><head><title>Verifone Home</title></head><body><p>Copyright VeriFone Systems, Inc.</p></body></html>`)
+	v, err := (&VerifoneFingerprinter{}).Fingerprint(htmlResp(200, string(copyrightOnly)), copyrightOnly)
 	require.NoError(t, err)
 	assert.Nil(t, v)
-	i, err := (&IngenicoFingerprinter{}).Fingerprint(resp, body)
+
+	datasheet := []byte(`<html><head><title>Buy Ingenico Telium iCT220</title></head><body><p>Ingenico Telium iCT220 datasheet</p></body></html>`)
+	i, err := (&IngenicoFingerprinter{}).Fingerprint(htmlResp(200, string(datasheet)), datasheet)
 	require.NoError(t, err)
 	assert.Nil(t, i)
 }

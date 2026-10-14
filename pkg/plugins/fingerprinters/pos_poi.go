@@ -56,14 +56,13 @@ const (
 	posPOIMaxBodySize         = 1 << 20
 	posPOIManagementFindingID = "pos-poi-management-exposed"
 	verifoneCPE               = "cpe:2.3:a:verifone:commander:*:*:*:*:*:*:*:*"
-	ingenicoCPE               = "cpe:2.3:o:ingenico:telium:*:*:*:*:*:*:*:*"
+	ingenicoCPE               = "cpe:2.3:o:ingenico:telium_2_firmware:*:*:*:*:*:*:*:*"
 )
 
 var (
 	verifoneCommanderTitle = regexp.MustCompile(`(?i)<title>[^<]*VeriFone\s+Commander`)
-	verifoneCopyright      = regexp.MustCompile(`(?i)VeriFone\s+Systems,\s+Inc`)
-	ingenicoTeliumTitle    = regexp.MustCompile(`(?i)<title>[^<]*Ingenico\s+Telium`)
-	ingenicoICTModel       = regexp.MustCompile(`(?i)\biCT\d{3}\b`)
+	ingenicoTeliumTitle    = regexp.MustCompile(`(?i)<title>\s*Ingenico\s+Telium\s*</title>`)
+	managementUIMarker     = regexp.MustCompile(`(?i)(<form\b|type=["']password["']|name=["']password["']|log\s*on|login)`)
 )
 
 // VerifoneFingerprinter detects Verifone Commander / POS management HTTP UIs.
@@ -81,7 +80,7 @@ func (f *VerifoneFingerprinter) Name() string { return "verifone" }
 func (f *IngenicoFingerprinter) Name() string { return "ingenico" }
 
 func posPOIMatch(resp *http.Response) bool {
-	if resp == nil || resp.StatusCode < 200 || resp.StatusCode >= 500 {
+	if resp == nil || resp.StatusCode != 200 {
 		return false
 	}
 	ct := strings.ToLower(resp.Header.Get("Content-Type"))
@@ -112,7 +111,7 @@ func (f *VerifoneFingerprinter) Fingerprint(resp *http.Response, body []byte) (*
 		return nil, nil
 	}
 	bodyStr := capBody(body)
-	if !verifoneCommanderTitle.MatchString(bodyStr) && !verifoneCopyright.MatchString(bodyStr) {
+	if !verifoneCommanderTitle.MatchString(bodyStr) {
 		return nil, nil
 	}
 	return &FingerprintResult{
@@ -132,13 +131,7 @@ func (f *IngenicoFingerprinter) Fingerprint(resp *http.Response, body []byte) (*
 		return nil, nil
 	}
 	bodyStr := capBody(body)
-	hasTitle := ingenicoTeliumTitle.MatchString(bodyStr)
-	hasTelium := strings.Contains(strings.ToLower(bodyStr), "telium")
-	hasICT := ingenicoICTModel.MatchString(bodyStr)
-	if !hasTitle && !(hasTelium && hasICT) {
-		return nil, nil
-	}
-	if !strings.Contains(strings.ToLower(bodyStr), "ingenico") {
+	if !ingenicoTeliumTitle.MatchString(bodyStr) || !managementUIMarker.MatchString(bodyStr) {
 		return nil, nil
 	}
 	return &FingerprintResult{
