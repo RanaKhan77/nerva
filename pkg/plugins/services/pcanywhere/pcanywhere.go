@@ -18,9 +18,9 @@ Package pcanywhere implements service detection for Symantec pcAnywhere.
 Detection uses documented handshakes, not HTTP banners:
 
   - TCP 5631: client hello of four NUL bytes. A pcAnywhere host replies
-    with "ST" (GIAC GCIA analyses of the proprietary handshake). Nmap
-    also fingerprints the unsolicited TCP banner starting \0X\x08\0}\x08
-    (match pcanywheredata) and the \x1bY2 probe response (match pc-anywhere).
+    with "Please press <Enter>" (nmap pcanywhere-brute.nse) or "ST" then
+    NULs (GIAC). Nmap also fingerprints the unsolicited TCP banner
+    starting \0X\x08\0}\x08 (match pcanywheredata).
   - UDP 5632: Nmap probe "NQ"; host replies NR{name}_*AHM_3___\0
     (nmap-service-probes Probe UDP pc-anywhere).
 */
@@ -62,18 +62,19 @@ func checkPcAnywhereTCP(data []byte) error {
 		invalid.Info = "response too short"
 		return invalid
 	}
-	// GIAC: host responds with "ST" in the first two payload bytes.
-	if data[0] == 'S' && data[1] == 'T' {
+	// nmap pcanywhere-brute.nse: hello 00000000, host replies with
+	// "Please press <Enter>".
+	if bytes.Contains(data, []byte("Please press <Enter>")) {
+		return nil
+	}
+	// GIAC: host responds with "ST" then NULs, not an arbitrary ST… banner.
+	if data[0] == 'S' && data[1] == 'T' && (len(data) == 2 || data[2] == 0x00) {
 		return nil
 	}
 	// Nmap NULL probe: match pcanywheredata m|^\0X\x08\0\}\x08
 	if len(data) >= 6 &&
 		data[0] == 0x00 && data[1] == 'X' && data[2] == 0x08 &&
 		data[3] == 0x00 && data[4] == '}' && data[5] == 0x08 {
-		return nil
-	}
-	// Nmap match pc-anywhere m|\x1bY2\0\x01\x03B
-	if len(data) >= 3 && data[0] == 0x1b && data[1] == 'Y' && data[2] == '2' {
 		return nil
 	}
 	return invalid
@@ -84,12 +85,24 @@ func checkPcAnywhereUDP(data []byte) error {
 		Service: PCANYWHERE,
 		Info:    "not a pcAnywhere UDP status reply",
 	}
-	if len(data) < 2 || data[0] != 'N' || data[1] != 'R' {
+	// Nmap: ^NR([^_]*)_*AHM_3___\0
+	if !bytes.HasPrefix(data, []byte("NR")) || !bytes.HasSuffix(data, []byte{0}) {
 		return invalid
 	}
-	// Nmap: ^NR([^_]*)_*AHM_3___\0
-	if !bytes.Contains(data, []byte("AHM_3___")) {
+	const marker = "AHM_3___"
+	idx := bytes.Index(data, []byte(marker))
+	if idx < 2 || idx+len(marker) != len(data)-1 {
 		return invalid
+	}
+	mid := data[2:idx]
+	i := 0
+	for i < len(mid) && mid[i] != '_' {
+		i++
+	}
+	for ; i < len(mid); i++ {
+		if mid[i] != '_' {
+			return invalid
+		}
 	}
 	return nil
 }
@@ -101,7 +114,7 @@ func emitService(target plugins.Target, transport plugins.Protocol, evidence str
 	if target.Misconfigs {
 		service.SecurityFindings = []plugins.SecurityFinding{{
 			ID:          "pcanywhere-exposed",
-			Severity:    plugins.SeverityMedium,
+			Severity:    plugins.SeverityLow,
 			Description: "pcAnywhere remote access listener exposed to the network",
 			Evidence:    evidence,
 		}}

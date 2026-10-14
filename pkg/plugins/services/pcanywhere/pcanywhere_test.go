@@ -63,8 +63,9 @@ func TestCheckPcAnywhereTCP(t *testing.T) {
 		wantErr bool
 	}{
 		{name: "ST handshake", data: fixtureST, wantErr: false},
+		{name: "nmap Please press Enter", data: []byte("Please press <Enter>"), wantErr: false},
 		{name: "nmap pcanywheredata banner", data: fixtureNmapBanner, wantErr: false},
-		{name: "nmap ESC-Y2 fingerprint", data: []byte{0x1b, 'Y', '2', 0x00, 0x01, 0x03, 'B'}, wantErr: false},
+		{name: "ST prefix false positive", data: []byte("STATUS OK\r\n"), wantErr: true},
 		{name: "HTTP banner fake", data: []byte("HTTP/1.1 200 OK"), wantErr: true},
 		{name: "empty", data: []byte{}, wantErr: true},
 		{name: "too short", data: []byte{0x00}, wantErr: true},
@@ -87,6 +88,8 @@ func TestCheckPcAnywhereUDP(t *testing.T) {
 	assert.NoError(t, checkPcAnywhereUDP(fixtureUDP))
 	assert.Error(t, checkPcAnywhereUDP([]byte("NQ")))
 	assert.Error(t, checkPcAnywhereUDP([]byte("NRHOST")))
+	assert.Error(t, checkPcAnywhereUDP([]byte("NRHOSTAHM_3___X")))
+	assert.Error(t, checkPcAnywhereUDP([]byte("NRHOST_AHM_3___JUNK\x00")))
 	assert.Error(t, checkPcAnywhereUDP([]byte("HTTP/1.1 200 OK")))
 }
 
@@ -103,6 +106,7 @@ func TestPcAnywherePlugin_Run_HandshakeSuccess_EmitsFinding(t *testing.T) {
 	assert.Equal(t, plugins.ProtoPcAnywhere, service.Protocol)
 	assert.Len(t, service.SecurityFindings, 1)
 	assert.Equal(t, "pcanywhere-exposed", service.SecurityFindings[0].ID)
+	assert.Equal(t, plugins.SeverityLow, service.SecurityFindings[0].Severity)
 }
 
 func TestPcAnywherePlugin_Run_NmapBanner_IdentifiesProtocol(t *testing.T) {
