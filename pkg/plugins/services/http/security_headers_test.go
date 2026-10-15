@@ -704,6 +704,17 @@ func TestHTTPPlugin_OSEol_Live(t *testing.T) {
 	}
 }
 
+func TestHTTPPlugin_OSEol_Redirect(t *testing.T) {
+	eol := runHTTPPlugin(t, "HTTP/1.1 301 Moved Permanently\r\n"+
+		"Location: https://example.local/\r\n"+
+		"Server: Apache/2.4.6 (CentOS)\r\n"+
+		"Content-Length: 0\r\n"+
+		"Connection: close\r\n\r\n")
+	if findFinding(eol.SecurityFindings, "os-eol") == nil {
+		t.Fatalf("expected os-eol on 301 with CentOS 7 Server header, got %v", eol.SecurityFindings)
+	}
+}
+
 // TestHTTPPlugin_ServerNoVersion_Live verifies that a Server header without a
 // version number (e.g. "cloudflare") does not produce an http-server-version
 // finding.

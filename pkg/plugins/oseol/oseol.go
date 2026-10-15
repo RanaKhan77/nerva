@@ -115,7 +115,7 @@ var (
 	cpe22OS = regexp.MustCompile(`(?i)cpe:/o:([^:]+):([^:]+):([^:]+)`)
 	debVer  = regexp.MustCompile(`(?i)\+deb(\d+)`)
 	elVer   = regexp.MustCompile(`(?i)\.el(\d+)\b`)
-	ubuntuY = regexp.MustCompile(`(?i)ubuntu(?:0\.)?(\d{2}\.\d{2})`)
+	ubuntuY = regexp.MustCompile(`(?i)ubuntu(?:0\.)?(?:[ /])?(\d{2}\.\d{2})`)
 	sshOpen = regexp.MustCompile(`(?i)OpenSSH_(\d+\.\d+)p`)
 	centosH = regexp.MustCompile(`(?i)\(CentOS(?: Linux)?(?:[ /](\d+))?\)`)
 	rhelH   = regexp.MustCompile(`(?i)\(Red Hat(?: Enterprise Linux)?(?:[ /](\d+))?\)`)
@@ -315,11 +315,17 @@ func fromELSuffix(text string) (*release, string) {
 	if m == nil {
 		return nil, ""
 	}
-	// .elN is the RPM disttag for RHEL and rebuilds. Prefer CentOS when the
-	// same text also names CentOS; otherwise treat as RHEL.
-	f := familyRHEL
-	if centosH.MatchString(text) || strings.Contains(strings.ToLower(text), "centos") {
+	// .elN is shared by RHEL rebuilds (Oracle, Rocky, Alma). Only emit when
+	// the same text also names RHEL or CentOS; otherwise the family is unidentified.
+	lower := strings.ToLower(text)
+	var f family
+	switch {
+	case centosH.MatchString(text) || strings.Contains(lower, "centos"):
 		f = familyCentOS
+	case rhelH.MatchString(text) || strings.Contains(lower, "red hat") || strings.Contains(lower, "redhat"):
+		f = familyRHEL
+	default:
+		return nil, ""
 	}
 	rel := lookup(f, m[1])
 	if rel == nil {

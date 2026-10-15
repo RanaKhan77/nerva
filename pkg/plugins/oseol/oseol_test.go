@@ -63,8 +63,18 @@ func TestCheck(t *testing.T) {
 			wantID: FindingID,
 		},
 		{
-			name:   "rhel7 el suffix",
-			text:   "OpenSSH_7.4-1.el7",
+			name:   "rhel7 el suffix with distro name",
+			text:   "OpenSSH_7.4-1.el7 (Red Hat Enterprise Linux)",
+			wantID: FindingID,
+		},
+		{
+			name:    "bare el7 suffix is unidentified family",
+			text:    "OpenSSH_7.4-1.el7",
+			wantNil: true,
+		},
+		{
+			name:   "ubuntu 20.04 with space",
+			text:   "Ubuntu 20.04 LTS",
 			wantID: FindingID,
 		},
 		{
