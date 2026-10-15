@@ -73,6 +73,11 @@ func TestCheck(t *testing.T) {
 			wantNil: true,
 		},
 		{
+			name:   "rhel7 el7_9 minor disttag",
+			text:   "openssl-1.0.2k-25.el7_9 (Red Hat Enterprise Linux)",
+			wantID: FindingID,
+		},
+		{
 			name:   "ubuntu 20.04 with space",
 			text:   "Ubuntu 20.04 LTS",
 			wantID: FindingID,

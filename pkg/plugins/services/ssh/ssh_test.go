@@ -306,7 +306,7 @@ func TestMakeSSHService_AppliesBannerFingerprinting(t *testing.T) {
 
 func TestMakeSSHService_OSEol(t *testing.T) {
 	eolBanner := "SSH-2.0-OpenSSH_7.2p2 Ubuntu-4ubuntu2.10"
-	supportedBanner := "SSH-2.0-OpenSSH_8.9p1 Ubuntu-3ubuntu0.10"
+	supportedBanner := "SSH-2.0-OpenSSH_9.6p1 Ubuntu-3ubuntu13"
 
 	eol := makeSSHService(plugins.Target{Host: "eol.example", Misconfigs: true}, plugins.ServiceSSH{Banner: eolBanner}, nil, false)
 	if findSSHFinding(eol.SecurityFindings, "os-eol") == nil {

@@ -114,7 +114,7 @@ var (
 	cpe23OS = regexp.MustCompile(`(?i)cpe:2\.3:o:([^:]+):([^:]+):([^:]+)`)
 	cpe22OS = regexp.MustCompile(`(?i)cpe:/o:([^:]+):([^:]+):([^:]+)`)
 	debVer  = regexp.MustCompile(`(?i)\+deb(\d+)`)
-	elVer   = regexp.MustCompile(`(?i)\.el(\d+)\b`)
+	elVer   = regexp.MustCompile(`(?i)\.el(\d+)(?:_\d+)?`)
 	ubuntuY = regexp.MustCompile(`(?i)ubuntu(?:0\.)?(?:[ /])?(\d{2}\.\d{2})`)
 	sshOpen = regexp.MustCompile(`(?i)OpenSSH_(\d+\.\d+)p`)
 	centosH = regexp.MustCompile(`(?i)\(CentOS(?: Linux)?(?:[ /](\d+))?\)`)
