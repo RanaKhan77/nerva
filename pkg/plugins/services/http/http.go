@@ -32,6 +32,7 @@ import (
 
 	"github.com/praetorian-inc/nerva/pkg/plugins"
 	"github.com/praetorian-inc/nerva/pkg/plugins/fingerprinters"
+	"github.com/praetorian-inc/nerva/pkg/plugins/oseol"
 	utils "github.com/praetorian-inc/nerva/pkg/plugins/pluginutils"
 )
 
@@ -190,6 +191,9 @@ func (p *HTTPPlugin) Run(conn net.Conn, timeout time.Duration, target plugins.Ta
 		if finding := checkDirectoryListing(body); finding != nil {
 			service.SecurityFindings = append(service.SecurityFindings, *finding)
 		}
+		if finding := oseol.Check(append([]string{resp.Header.Get("Server")}, payload.CPEs...)...); finding != nil {
+			service.SecurityFindings = append(service.SecurityFindings, *finding)
+		}
 	}
 	if target.Deep {
 		deepClient := &http.Client{
@@ -303,6 +307,9 @@ func (p *HTTPSPlugin) Run(
 				service.SecurityFindings = append(service.SecurityFindings, *finding)
 			}
 			if finding := checkDirectoryListing(body); finding != nil {
+				service.SecurityFindings = append(service.SecurityFindings, *finding)
+			}
+			if finding := oseol.Check(append([]string{resp.Header.Get("Server")}, payload.CPEs...)...); finding != nil {
 				service.SecurityFindings = append(service.SecurityFindings, *finding)
 			}
 		}
