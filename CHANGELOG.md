@@ -20,6 +20,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Raise `jdwp-exposed` to Critical (CVSS 9.8). Handshake-confirmed JDWP is unauthenticated remote code execution; catalog previously overwrote the plugin High to Medium.
 - JetDirect raw-print ports (9100-9102) are now inferred without writing probe bytes by default; PJL identification and model/firmware enrichment require `--deep`. Prevents physical pages being printed when non-PJL devices treat scan probes as document data. Trade-off: port 9100 is treated as JetDirect, so Oracle GoldenGate Microservices on 9100 is no longer separately identified.
 
+### Fixed
+
+- Removed the misleading `--udp` "may require root" note. Nerva UDP scans use connected datagram sockets and do not need root.
+
 ## [1.4.0] - 2026-05-08
 
 ### Added
