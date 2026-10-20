@@ -18,28 +18,33 @@ Verifone and Ingenico POS/POI management interfaces (ENG-9060).
 
 # What We Detect
 
-Payment-terminal / site-controller management planes that identify themselves
-over HTTP/TLS:
+Management-plane HTML that has been captured on public login pages:
 
-  - Verifone Commander (site controller) login/title pages, including the
-    "VeriFone Commander" title and "VeriFone Systems, Inc." copyright used on
-    Commander management UIs.
-  - Ingenico Telium terminal-management pages (title "Ingenico Telium" plus
-    Telium / iCT model markers).
+  - Verifone VHQ: live <title>VHQ</title> on
+    /VHQ.Authentication.VHQFederationV1/Account/Login
+    (vhq.connect.verifone.com), plus Verifone copyright and a login form.
+  - Ingenico Estate Manager: live <title>Ingenico Estate Management</title>
+    on /emgui/resetPassword.jsp (mcmemuat.roamdata.com).
+  - Ingenico TMS: live <title>TMS Web Access- Login</title> on
+    /extranet/login.sm (tmsweb.services.ingenico.co.uk).
 
-Detection is banner/HTML identity of the management plane. Hardware-in-the-loop
-is out of scope.
+Nerva does not follow redirects and does not re-queue Location targets.
+These fingerprinters actively GET the captured management paths (same
+host:port). A 302 on GET / is not itself a detection.
 
 # What We Do NOT Detect
 
   - Generic HTTP servers (Apache, nginx, empty bodies).
   - Pages that merely mention the vendor in prose (news, marketing).
+  - Catch-all redirects: Location is never a detection signal.
+  - Unverified on-box titles (VeriFone Commander, Configuration Client,
+    Ingenico Telium) and unverified product Server tokens.
   - In-browser POS payloads (ENG-5284).
   - Oracle Hospitality Simphony / MICROS EGateway (oracle_simphony.go).
 
 # Finding
 
-Both products emit the same stable finding ID, pos-poi-management-exposed,
+Both vendors emit the same stable finding ID, pos-poi-management-exposed,
 catalogued in pkg/plugins/finding_catalog.go.
 */
 package fingerprinters
@@ -55,40 +60,83 @@ import (
 const (
 	posPOIMaxBodySize         = 1 << 20
 	posPOIManagementFindingID = "pos-poi-management-exposed"
-	verifoneCPE               = "cpe:2.3:a:verifone:commander:*:*:*:*:*:*:*:*"
-	ingenicoCPE               = "cpe:2.3:o:ingenico:telium_2_firmware:*:*:*:*:*:*:*:*"
+	verifoneCPE               = "cpe:2.3:a:verifone:vhq:*:*:*:*:*:*:*:*"
+	ingenicoEstateCPE         = "cpe:2.3:a:ingenico:estate_manager:*:*:*:*:*:*:*:*"
+	ingenicoTMSCPE            = "cpe:2.3:a:ingenico:tms:*:*:*:*:*:*:*:*"
+	verifoneProbePath         = "/VHQ.Authentication.VHQFederationV1/Account/Login"
+	ingenicoProbePath         = "/emgui/resetPassword.jsp"
+	ingenicoTMSProbePath      = "/extranet/login.sm"
 )
 
 var (
-	verifoneCommanderTitle = regexp.MustCompile(`(?i)<title>[^<]*VeriFone\s+Commander`)
-	ingenicoTeliumTitle    = regexp.MustCompile(`(?i)<title>\s*Ingenico\s+Telium\s*</title>`)
-	managementUIMarker     = regexp.MustCompile(`(?i)(<form\b|type=["']password["']|name=["']password["']|log\s*on|login)`)
+	// Live vhq.connect.verifone.com login HTML.
+	vhqTitle           = regexp.MustCompile(`(?i)<title>\s*VHQ\s*</title>`)
+	verifoneCopyright  = regexp.MustCompile(`(?i)Verifone Systems, Inc`)
+	vhqAuthPath        = regexp.MustCompile(`(?i)/VHQ\.Authentication\.`)
+	managementUIMarker = regexp.MustCompile(`(?i)(<form\b|type=["']password["']|name=["']password["']|log\s*on|login|forgot\s+password)`)
+
+	// Live mcmemuat.roamdata.com/emgui/resetPassword.jsp
+	ingenicoEstateTitle = regexp.MustCompile(`(?i)<title>\s*Ingenico\s+Estate\s+Management\s*</title>`)
+	ingenicoBody        = regexp.MustCompile(`(?i)Ingenico`)
+
+	// Live tmsweb.services.ingenico.co.uk/extranet/login.sm
+	ingenicoTMSTitle = regexp.MustCompile(`(?i)<title>\s*TMS Web Access-\s*Login\s*</title>`)
 )
 
-// VerifoneFingerprinter detects Verifone Commander / POS management HTTP UIs.
+// VerifoneFingerprinter detects Verifone VHQ management HTTP UIs.
 type VerifoneFingerprinter struct{}
 
-// IngenicoFingerprinter detects Ingenico Telium POS/POI management HTTP UIs.
+// IngenicoFingerprinter detects Ingenico Estate Manager management HTTP UIs.
 type IngenicoFingerprinter struct{}
+
+// IngenicoTMSFingerprinter detects Ingenico TMS Web Access management HTTP UIs.
+type IngenicoTMSFingerprinter struct{}
+
+var (
+	_ HTTPFingerprinter       = (*VerifoneFingerprinter)(nil)
+	_ ActiveHTTPFingerprinter = (*VerifoneFingerprinter)(nil)
+	_ AcceptHeaderProvider    = (*VerifoneFingerprinter)(nil)
+	_ HTTPFingerprinter       = (*IngenicoFingerprinter)(nil)
+	_ ActiveHTTPFingerprinter = (*IngenicoFingerprinter)(nil)
+	_ AcceptHeaderProvider    = (*IngenicoFingerprinter)(nil)
+	_ HTTPFingerprinter       = (*IngenicoTMSFingerprinter)(nil)
+	_ ActiveHTTPFingerprinter = (*IngenicoTMSFingerprinter)(nil)
+	_ AcceptHeaderProvider    = (*IngenicoTMSFingerprinter)(nil)
+)
 
 func init() {
 	Register(&VerifoneFingerprinter{})
 	Register(&IngenicoFingerprinter{})
+	Register(&IngenicoTMSFingerprinter{})
 }
 
-func (f *VerifoneFingerprinter) Name() string { return "verifone" }
-func (f *IngenicoFingerprinter) Name() string { return "ingenico" }
+func (f *VerifoneFingerprinter) Name() string    { return "verifone" }
+func (f *IngenicoFingerprinter) Name() string    { return "ingenico" }
+func (f *IngenicoTMSFingerprinter) Name() string { return "ingenico-tms" }
 
-func posPOIMatch(resp *http.Response) bool {
-	if resp == nil || resp.StatusCode != 200 {
+func (f *VerifoneFingerprinter) ProbeEndpoint() string    { return verifoneProbePath }
+func (f *IngenicoFingerprinter) ProbeEndpoint() string    { return ingenicoProbePath }
+func (f *IngenicoTMSFingerprinter) ProbeEndpoint() string { return ingenicoTMSProbePath }
+
+func (f *VerifoneFingerprinter) ProbeAccept() string    { return "text/html" }
+func (f *IngenicoFingerprinter) ProbeAccept() string    { return "text/html" }
+func (f *IngenicoTMSFingerprinter) ProbeAccept() string { return "text/html" }
+
+func posPOIStatusOK(resp *http.Response) bool {
+	return resp != nil && resp.StatusCode >= 200 && resp.StatusCode < 400
+}
+
+func posPOIHTML(resp *http.Response) bool {
+	if !posPOIStatusOK(resp) {
 		return false
 	}
 	ct := strings.ToLower(resp.Header.Get("Content-Type"))
 	return strings.Contains(ct, "text/html")
 }
 
-func (f *VerifoneFingerprinter) Match(resp *http.Response) bool { return posPOIMatch(resp) }
-func (f *IngenicoFingerprinter) Match(resp *http.Response) bool { return posPOIMatch(resp) }
+func (f *VerifoneFingerprinter) Match(resp *http.Response) bool    { return posPOIHTML(resp) }
+func (f *IngenicoFingerprinter) Match(resp *http.Response) bool    { return posPOIHTML(resp) }
+func (f *IngenicoTMSFingerprinter) Match(resp *http.Response) bool { return posPOIHTML(resp) }
 
 func capBody(body []byte) string {
 	if len(body) > posPOIMaxBodySize {
@@ -106,12 +154,32 @@ func posPOIFinding(evidence string) plugins.SecurityFinding {
 	}
 }
 
+func verifoneIdentity(bodyStr string) (evidence string, ok bool) {
+	if !vhqTitle.MatchString(bodyStr) || !managementUIMarker.MatchString(bodyStr) {
+		return "", false
+	}
+	if !verifoneCopyright.MatchString(bodyStr) && !vhqAuthPath.MatchString(bodyStr) {
+		return "", false
+	}
+	return "Verifone VHQ management HTML identity", true
+}
+
+func ingenicoIdentity(bodyStr string) (evidence string, product, cpe string, ok bool) {
+	if ingenicoEstateTitle.MatchString(bodyStr) && ingenicoBody.MatchString(bodyStr) && managementUIMarker.MatchString(bodyStr) {
+		return "Ingenico Estate Management HTML identity", "Estate Manager", ingenicoEstateCPE, true
+	}
+	if ingenicoTMSTitle.MatchString(bodyStr) && ingenicoBody.MatchString(bodyStr) && managementUIMarker.MatchString(bodyStr) {
+		return "Ingenico TMS Web Access HTML identity", "TMS", ingenicoTMSCPE, true
+	}
+	return "", "", "", false
+}
+
 func (f *VerifoneFingerprinter) Fingerprint(resp *http.Response, body []byte) (*FingerprintResult, error) {
-	if !posPOIMatch(resp) {
+	if !f.Match(resp) {
 		return nil, nil
 	}
-	bodyStr := capBody(body)
-	if !verifoneCommanderTitle.MatchString(bodyStr) {
+	evidence, ok := verifoneIdentity(capBody(body))
+	if !ok {
 		return nil, nil
 	}
 	return &FingerprintResult{
@@ -120,28 +188,36 @@ func (f *VerifoneFingerprinter) Fingerprint(resp *http.Response, body []byte) (*
 		CPEs:       []string{verifoneCPE},
 		Metadata: map[string]any{
 			"vendor":  "Verifone",
-			"product": "Commander",
+			"product": "VHQ",
 		},
-		SecurityFindings: []plugins.SecurityFinding{posPOIFinding("Verifone Commander management HTML identity")},
+		SecurityFindings: []plugins.SecurityFinding{posPOIFinding(evidence)},
 	}, nil
 }
 
-func (f *IngenicoFingerprinter) Fingerprint(resp *http.Response, body []byte) (*FingerprintResult, error) {
-	if !posPOIMatch(resp) {
+func fingerprintIngenico(resp *http.Response, body []byte) (*FingerprintResult, error) {
+	if !posPOIHTML(resp) {
 		return nil, nil
 	}
-	bodyStr := capBody(body)
-	if !ingenicoTeliumTitle.MatchString(bodyStr) || !managementUIMarker.MatchString(bodyStr) {
+	evidence, product, cpe, ok := ingenicoIdentity(capBody(body))
+	if !ok {
 		return nil, nil
 	}
 	return &FingerprintResult{
 		Technology: "ingenico",
 		Version:    "",
-		CPEs:       []string{ingenicoCPE},
+		CPEs:       []string{cpe},
 		Metadata: map[string]any{
 			"vendor":  "Ingenico",
-			"product": "Telium",
+			"product": product,
 		},
-		SecurityFindings: []plugins.SecurityFinding{posPOIFinding("Ingenico Telium management HTML identity")},
+		SecurityFindings: []plugins.SecurityFinding{posPOIFinding(evidence)},
 	}, nil
+}
+
+func (f *IngenicoFingerprinter) Fingerprint(resp *http.Response, body []byte) (*FingerprintResult, error) {
+	return fingerprintIngenico(resp, body)
+}
+
+func (f *IngenicoTMSFingerprinter) Fingerprint(resp *http.Response, body []byte) (*FingerprintResult, error) {
+	return fingerprintIngenico(resp, body)
 }

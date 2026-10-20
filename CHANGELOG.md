@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Fingerprint internet-exposed Verifone VHQ and Ingenico Estate Manager / TMS management UIs; emit `pos-poi-management-exposed` (ENG-9060). Identity is live-captured HTML titles only (`VHQ`, `Ingenico Estate Management`, `TMS Web Access- Login`).
 - CLI-surface drift gate: `make cli-docs` regenerates `docs/CLI.md` and `docs/cli-surface.json` from the live cobra tree; CI fails when documentation drifts (ENG-8010).
 
 ### Changed
