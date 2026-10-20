@@ -107,8 +107,27 @@ func TestLogonNoAuthSucceeds(t *testing.T) {
 	if strings.Contains(string(resp), "ORA-01017") {
 		t.Fatal("no-auth logon returned ORA-01017")
 	}
-	if !strings.Contains(string(resp), "AUTH_SESSKEY") {
-		t.Fatalf("no-auth logon: want AUTH_SESSKEY, got %q", resp)
+	if !strings.Contains(string(resp), "AUTH_SESSION_ID") {
+		t.Fatalf("no-auth logon: want AUTH_SESSION_ID, got %q", resp)
+	}
+	if strings.Contains(string(resp), "AUTH_SESSKEY") {
+		t.Fatal("phase-2 success must not be an AUTH_SESSKEY challenge")
+	}
+}
+
+func TestPhase1ChallengeBothModes(t *testing.T) {
+	preauth := dataPayload([]byte{sqlnetUserOCIFunc, ociGetSessKey})
+	for _, m := range []mode{modeAuthRequired, modeNoAuth} {
+		resp := handleData(preauth, m)
+		if !strings.Contains(string(resp), "AUTH_SESSKEY") {
+			t.Errorf("mode %s phase-1: want AUTH_SESSKEY, got %q", m, resp)
+		}
+		if strings.Contains(string(resp), "AUTH_SESSION_ID") {
+			t.Errorf("mode %s phase-1 must not return AUTH_SESSION_ID", m)
+		}
+		if strings.Contains(string(resp), "ORA-01017") {
+			t.Errorf("mode %s phase-1 must not return ORA-01017", m)
+		}
 	}
 }
 
@@ -153,8 +172,8 @@ func TestLiveNoAuthSession(t *testing.T) {
 	if strings.Contains(string(logon), "ORA-01017") {
 		t.Fatalf("no-auth live logon denied: %q", logon)
 	}
-	if !strings.Contains(string(logon), "AUTH_SESSKEY") {
-		t.Fatalf("no-auth live logon missing AUTH_SESSKEY: %q", logon)
+	if !strings.Contains(string(logon), "AUTH_SESSION_ID") {
+		t.Fatalf("no-auth live logon missing AUTH_SESSION_ID: %q", logon)
 	}
 }
 
@@ -236,8 +255,8 @@ func TestDockerComposePostures(t *testing.T) {
 		if strings.Contains(string(got), "ORA-01017") {
 			t.Fatal("no-auth must not return ORA-01017")
 		}
-		if !strings.Contains(string(got), "AUTH_SESSKEY") {
-			t.Fatalf("want AUTH_SESSKEY, got %q", got)
+		if !strings.Contains(string(got), "AUTH_SESSION_ID") {
+			t.Fatalf("want AUTH_SESSION_ID, got %q", got)
 		}
 	})
 }

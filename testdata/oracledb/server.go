@@ -23,11 +23,12 @@
 //	tns-only       — listener with no registered services. Every TNS Connect
 //	                 is refused with ORA-12514. No database session is possible.
 //	auth-required  — listener with common SIDs/service names. TNS Accept for
-//	                 a known service, then every logon is rejected with
-//	                 ORA-01017 (empty/absent credentials included).
-//	no-auth        — same listener/services as auth-required, but a completed
-//	                 logon establishes a session without verifying credentials
-//	                 (PostgreSQL trust / MySQL empty-password analog).
+//	                 a known service. Phase-1 PreAuth returns AUTH_SESSKEY;
+//	                 phase-2 (AUTH_PASSWORD) is rejected with ORA-01017.
+//	no-auth        — same listener/services as auth-required. Phase-1 PreAuth
+//	                 still returns the O5LOGON AUTH_SESSKEY challenge; phase-2
+//	                 (AUTH_PASSWORD) establishes a session without verifying
+//	                 credentials (PostgreSQL trust / MySQL empty-password analog).
 package main
 
 import (
@@ -240,17 +241,27 @@ func handleConnect(payload []byte, m mode) ([]byte, bool) {
 func handleData(payload []byte, m mode) []byte {
 	body := tnsDataBody(payload)
 	if looksLikeLogon(body) {
-		if m == modeNoAuth {
-			log.Printf("logon accepted (no-auth)")
-			return buildLogonSuccess()
+		if isPhase2Logon(body) {
+			if m == modeNoAuth {
+				log.Printf("phase-2 logon accepted (no-auth)")
+				return buildLogonSuccess()
+			}
+			log.Printf("phase-2 logon denied (auth-required)")
+			return buildLogonDenied()
 		}
-		log.Printf("logon denied (auth-required)")
-		return buildLogonDenied()
+		// Phase 1: both postures issue the O5LOGON challenge. A completed
+		// session is AUTH_SESSION_ID on phase 2, not AUTH_SESSKEY here.
+		log.Printf("phase-1 challenge (mode=%s)", m)
+		return buildPreAuthChallenge()
 	}
 	// Protocol negotiation (Set Protocol / Set Datatypes / anything else
 	// that is not a logon). Keep the session open so the client can proceed
 	// to authenticate.
 	return buildSetProtocolReply()
+}
+
+func isPhase2Logon(body []byte) bool {
+	return containsASCIIOrUTF16(body, "AUTH_PASSWORD")
 }
 
 func tnsDataBody(payload []byte) []byte {
@@ -440,11 +451,19 @@ func buildLogonDenied() []byte {
 	return buildData(body)
 }
 
-func buildLogonSuccess() []byte {
-	// Session established. AUTH_* keys are what a thin client looks for on
-	// a successful OAUTH; there is no ORA-01017.
+func buildPreAuthChallenge() []byte {
+	// O5LOGON phase-1 challenge. AUTH_SESSKEY is not a completed session.
 	msg := []byte("AUTH_SESSKEY\x00AUTH_VFR_DATA\x00AUTH_VERSION\x00")
-	body := []byte{sqlnetUserOCIFunc, ociLogon}
+	body := []byte{sqlnetUserOCIFunc, ociGetSessKey}
+	body = append(body, msg...)
+	return buildData(body)
+}
+
+func buildLogonSuccess() []byte {
+	// Completed logon. AUTH_SESSION_ID is what a thin client looks for after
+	// phase-2 OAUTH; there is no ORA-01017.
+	msg := []byte("AUTH_SESSION_ID\x00AUTH_SERIAL_NUM\x00AUTH_VERSION\x00")
+	body := []byte{sqlnetUserOCIFunc, ociGenericAuth}
 	body = append(body, msg...)
 	return buildData(body)
 }

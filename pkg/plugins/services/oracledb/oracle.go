@@ -406,9 +406,9 @@ func (p *ORACLEPlugin) Run(conn net.Conn, timeout time.Duration, target plugins.
 		service.AnonymousAccess = true
 		service.SecurityFindings = []plugins.SecurityFinding{{
 			ID:          "oracle-no-auth",
-			Severity:    plugins.SeverityCritical,
+			Severity:    plugins.SeverityMedium,
 			Description: "Oracle Database accessible without authentication",
-			Evidence:    "empty-user PreAuth received AUTH_SESSKEY without ORA-01017",
+			Evidence:    "empty-user logon received AUTH_SESSION_ID without an authentication-required error",
 		}}
 	}
 	return service, nil
@@ -439,17 +439,39 @@ func tnsPacketType(response []byte) int {
 }
 
 func loginIndicatesAuthRequired(response []byte) bool {
-	return bytes.Contains(response, []byte("ORA-01017")) ||
-		bytes.Contains(response, []byte("ORA-1017")) ||
-		bytes.Contains(response, []byte("(ERR=1017)"))
+	markers := [][]byte{
+		[]byte("ORA-01017"), []byte("ORA-1017"), []byte("(ERR=1017)"),
+		[]byte("ORA-01005"), []byte("ORA-1005"), []byte("(ERR=1005)"),
+		[]byte("ORA-01004"), []byte("ORA-1004"), []byte("(ERR=1004)"),
+		[]byte("ORA-28218"), []byte("(ERR=28218)"),
+		[]byte("ORA-00988"), []byte("(ERR=988)"),
+	}
+	for _, m := range markers {
+		if bytes.Contains(response, m) {
+			return true
+		}
+	}
+	return false
 }
 
 // canSelfDialOracle skips unspecified addresses (0.0.0.0 / ::) so a
-// hostname/proxy scan does not misdial localhost. Mirrors weblogic
-// canSelfDialConsole.
+// hostname/proxy scan does not misdial localhost when no engine dialer is
+// attached. Mirrors weblogic canSelfDialConsole.
 func canSelfDialOracle(target plugins.Target) bool {
 	a := target.Address.Addr()
 	return a.IsValid() && !a.IsUnspecified()
+}
+
+func oracleDialTCP(target plugins.Target) func(string, time.Duration) (net.Conn, error) {
+	if target.DialTCP != nil {
+		return target.DialTCP
+	}
+	if !canSelfDialOracle(target) {
+		return nil
+	}
+	return func(address string, timeout time.Duration) (net.Conn, error) {
+		return net.DialTimeout("tcp", address, timeout)
+	}
 }
 
 func tnsDataPacket(payload []byte) []byte {
@@ -462,16 +484,82 @@ func tnsDataPacket(payload []byte) []byte {
 	return pkt
 }
 
-// emptyUserPreAuth is a TNS Data PreAuth (0x0376) for an empty username.
-// AUTH_SESSKEY in the reply is the logon-challenge marker; ORA-01017 means
-// credentials were required. TNS Accept alone is not a DB session.
-func emptyUserPreAuth() []byte {
-	payload := []byte{0x03, 0x76, 0x00}
-	return tnsDataPacket(payload)
+func ttcClr(b []byte) []byte {
+	if len(b) == 0 {
+		return []byte{0}
+	}
+	out := make([]byte, 1+len(b))
+	out[0] = byte(len(b))
+	copy(out[1:], b)
+	return out
 }
 
-// emptyCredentialSessionSucceeded reports a DB logon that accepted empty
-// credentials. TNS Accept (type 2) is only listener handoff — not a session.
+func ttcKeyVal(key, val string) []byte {
+	var buf []byte
+	buf = append(buf, ttcClr([]byte(key))...)
+	buf = append(buf, ttcClr([]byte(val))...)
+	buf = append(buf, 0x00) // associated numeric field, unused
+	return buf
+}
+
+func ttcSetProtocol() []byte {
+	return tnsDataPacket([]byte{0x01, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01, 0x00, 'n', 'e', 'r', 'v', 'a', 0x00})
+}
+
+func ttcSetDataTypes() []byte {
+	return tnsDataPacket([]byte{0x02, 0x00})
+}
+
+func appendEmptyLogonHeader(ttc []byte, fn byte) []byte {
+	ttc = append(ttc, 0x03, fn, 0x00, 0x01)
+	ttc = append(ttc, 0x00)                         // username length 0
+	ttc = append(ttc, 0x04, 0x01, 0x00, 0x00, 0x00) // logon mode NoNewPass
+	ttc = append(ttc, 0x01, 0x01, 0x05, 0x01, 0x01)
+	ttc = append(ttc, 0x00) // empty username
+	return ttc
+}
+
+// emptyUserPreAuth is TTC PreAuth (0x76 / ociGetSessKey) for an empty username
+// after protocol and data-type negotiation. AUTH_SESSKEY in the reply is the
+// phase-1 challenge, not a session.
+func emptyUserPreAuth() []byte {
+	ttc := appendEmptyLogonHeader(nil, 0x76)
+	for _, kv := range [][2]string{
+		{"AUTH_TERMINAL", "unknown"},
+		{"AUTH_PROGRAM_NM", "nerva"},
+		{"AUTH_MACHINE", "unknown"},
+		{"AUTH_PID", "0"},
+		{"AUTH_SID", ""},
+	} {
+		ttc = append(ttc, ttcKeyVal(kv[0], kv[1])...)
+	}
+	return tnsDataPacket(ttc)
+}
+
+// emptyUserAuthPassword is TTC OAUTH (0x73) phase-2 with an empty password.
+// AUTH_SESSION_ID without an auth-required error is a completed empty logon.
+func emptyUserAuthPassword() []byte {
+	ttc := appendEmptyLogonHeader(nil, 0x73)
+	for _, kv := range [][2]string{
+		{"AUTH_PASSWORD", ""},
+		{"AUTH_TERMINAL", "unknown"},
+		{"AUTH_PROGRAM_NM", "nerva"},
+		{"AUTH_MACHINE", "unknown"},
+		{"AUTH_PID", "0"},
+		{"AUTH_SID", ""},
+	} {
+		ttc = append(ttc, ttcKeyVal(kv[0], kv[1])...)
+	}
+	return tnsDataPacket(ttc)
+}
+
+func hasAuthChallenge(response []byte) bool {
+	return tnsPacketType(response) == 6 && bytes.Contains(response, []byte("AUTH_SESSKEY"))
+}
+
+// emptyCredentialSessionSucceeded reports a completed empty-credential logon.
+// AUTH_SESSKEY is the phase-1 challenge and is not sufficient. TNS Accept
+// (type 2) is only listener handoff.
 func emptyCredentialSessionSucceeded(response []byte) bool {
 	if tnsPacketType(response) != 6 {
 		return false
@@ -479,14 +567,24 @@ func emptyCredentialSessionSucceeded(response []byte) bool {
 	if loginIndicatesAuthRequired(response) {
 		return false
 	}
-	return bytes.Contains(response, []byte("AUTH_SESSKEY"))
+	return bytes.Contains(response, []byte("AUTH_SESSION_ID"))
+}
+
+func sendTNS(conn net.Conn, pkt []byte, timeout time.Duration) ([]byte, bool) {
+	response, err := utils.SendRecv(conn, pkt, timeout)
+	if err != nil || len(response) == 0 {
+		return nil, false
+	}
+	return response, true
 }
 
 // tryEmptyCredentialSession dials a fresh connection (TNS Refuse closes the
-// fingerprint conversation). After TNS Accept it sends empty-user PreAuth and
-// requires AUTH_SESSKEY without ORA-01017.
+// fingerprint conversation). After TNS Accept it negotiates TTC, sends
+// empty-user PreAuth, then empty-password OAUTH, and requires AUTH_SESSION_ID
+// without an authentication-required error.
 func tryEmptyCredentialSession(timeout time.Duration, target plugins.Target) bool {
-	if !canSelfDialOracle(target) {
+	dial := oracleDialTCP(target)
+	if dial == nil {
 		return false
 	}
 	host := target.Host
@@ -494,35 +592,43 @@ func tryEmptyCredentialSession(timeout time.Duration, target plugins.Target) boo
 		host = target.Address.Addr().String()
 	}
 	port := fmt.Sprintf("%d", target.Address.Port())
+	addr := target.Address.String()
 	for _, service := range emptyCredentialServiceNames {
-		conn, err := net.DialTimeout("tcp", target.Address.String(), timeout)
-		if err != nil {
-			return false
-		}
-		response, err := utils.SendRecv(conn, emptyCredentialConnect(host, port, service), timeout)
-		if err != nil || len(response) == 0 {
-			_ = conn.Close()
-			continue
-		}
-		if loginIndicatesAuthRequired(response) {
-			_ = conn.Close()
-			return false
-		}
-		if tnsPacketType(response) != 2 {
-			_ = conn.Close()
-			continue
-		}
-		preauth, err := utils.SendRecv(conn, emptyUserPreAuth(), timeout)
-		_ = conn.Close()
-		if err != nil || len(preauth) == 0 {
-			continue
-		}
-		if loginIndicatesAuthRequired(preauth) {
-			return false
-		}
-		if emptyCredentialSessionSucceeded(preauth) {
+		if probeEmptyCredentialService(dial, addr, host, port, service, timeout) {
 			return true
 		}
 	}
 	return false
+}
+
+func probeEmptyCredentialService(
+	dial func(string, time.Duration) (net.Conn, error),
+	addr, host, port, service string,
+	timeout time.Duration,
+) bool {
+	conn, err := dial(addr, timeout)
+	if err != nil {
+		return false
+	}
+	defer func() { _ = conn.Close() }()
+
+	response, ok := sendTNS(conn, emptyCredentialConnect(host, port, service), timeout)
+	if !ok || loginIndicatesAuthRequired(response) || tnsPacketType(response) != 2 {
+		return false
+	}
+	if _, ok = sendTNS(conn, ttcSetProtocol(), timeout); !ok {
+		return false
+	}
+	if _, ok = sendTNS(conn, ttcSetDataTypes(), timeout); !ok {
+		return false
+	}
+	preauth, ok := sendTNS(conn, emptyUserPreAuth(), timeout)
+	if !ok || loginIndicatesAuthRequired(preauth) || !hasAuthChallenge(preauth) {
+		return false
+	}
+	phase2, ok := sendTNS(conn, emptyUserAuthPassword(), timeout)
+	if !ok || loginIndicatesAuthRequired(phase2) {
+		return false
+	}
+	return emptyCredentialSessionSucceeded(phase2)
 }

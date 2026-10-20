@@ -12,8 +12,8 @@ postures that match the ticket, without replaying any detector probe.
 
 | Host port | MODE            | TNS Connect to SID `XE` / `ORCL` / `FREEPDB1` | Empty/absent logon                         | Finding ID        |
 |-----------|-----------------|-----------------------------------------------|--------------------------------------------|-------------------|
-| 15211     | `no-auth`       | Accept                                        | Session established (`AUTH_SESSKEY`)       | `oracle-no-auth`  |
-| 15212     | `auth-required` | Accept                                        | `ORA-01017` invalid username/password      | (must not emit)   |
+| 15211     | `no-auth`       | Accept                                        | Phase-1 `AUTH_SESSKEY` challenge, then phase-2 session (`AUTH_SESSION_ID`) | `oracle-no-auth`  |
+| 15212     | `auth-required` | Accept                                        | Phase-1 `AUTH_SESSKEY` challenge, then `ORA-01017` on phase-2 | (must not emit)   |
 | 15213     | `tns-only`      | Refuse `ORA-12514` (no registered services)   | No DB session is possible                  | (must not emit)   |
 
 Unknown `SERVICE_NAME` / `SID` values are refused with `ORA-12514` on
@@ -34,7 +34,11 @@ without a database session.
 | Listener with no services (`tnslsnr` only) | TNS-only analog. This fixture's `tns-only` mode. |
 
 `no-auth` is the PostgreSQL `POSTGRES_HOST_AUTH_METHOD=trust` analog:
-any completed logon establishes a session. The fixture does not
+any completed logon establishes a session. Phase-1 PreAuth always
+returns the O5LOGON `AUTH_SESSKEY` challenge in both `no-auth` and
+`auth-required`; only phase-2 (`AUTH_PASSWORD`) returns
+`AUTH_SESSION_ID` (no-auth) or `ORA-01017` (auth-required). A detector
+must not treat the challenge as a session. The fixture does not
 re-implement O5LOGON crypto, so it does not try to tell an encrypted
 empty password from a real one. A detector is expected to probe with
 empty or absent credentials; this target answers the three postures.
@@ -56,8 +60,8 @@ Version 21.0.0.0.0` banner. Status on `tns-only` reports no services.
 docker compose -f testdata/oracledb/docker-compose.yml up -d --build
 
 # TNS-only: Refuse 12514 even for SID XE
-# auth-required: Accept XE, then ORA-01017 on logon
-# no-auth: Accept XE, then AUTH_SESSKEY on logon
+# auth-required: Accept XE, AUTH_SESSKEY on phase-1, ORA-01017 on phase-2
+# no-auth: Accept XE, AUTH_SESSKEY on phase-1, AUTH_SESSION_ID on phase-2
 
 ./nerva --misconfigs --json -t 127.0.0.1:15211,127.0.0.1:15212,127.0.0.1:15213
 
