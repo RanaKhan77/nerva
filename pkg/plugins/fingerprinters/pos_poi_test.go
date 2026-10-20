@@ -23,13 +23,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var (
-	_ ActiveHTTPFingerprinter = (*VerifoneFingerprinter)(nil)
-	_ ActiveHTTPFingerprinter = (*IngenicoFingerprinter)(nil)
-	_ AcceptHeaderProvider    = (*VerifoneFingerprinter)(nil)
-	_ AcceptHeaderProvider    = (*IngenicoFingerprinter)(nil)
-)
-
 // Live vhq.connect.verifone.com/VHQ.Authentication.VHQFederationV1/Account/Login
 const verifoneVHQFixture = `<!DOCTYPE html>
 <html lang="en">
@@ -41,8 +34,8 @@ const verifoneVHQFixture = `<!DOCTYPE html>
     <div class="version-text">Version 3.30.02.27</div>
     <form method="post" action="Account/Login" id="formTest">
         <span id="loginFailedMsg">Invalid user name or password</span>
-        <input type="text" name="username" id="txtloginname">
-        <input type="password" name="password" id="txtpassword">
+        <input type="text" name="username" id="txtloginname" autocomplete="off">
+        <input type="password" name="password" id="txtpassword" autocomplete="off">
         <button type="submit" id="Btnsubmit">Login</button>
     </form>
     <div class="login-footer">
@@ -124,7 +117,7 @@ const ingenicoMarketingFixture = `<!DOCTYPE html>
 </body>
 </html>`
 
-func htmlResp(status int, body string) *http.Response {
+func htmlResp(status int) *http.Response {
 	h := http.Header{}
 	h.Set("Content-Type", "text/html")
 	return &http.Response{StatusCode: status, Header: h}
@@ -162,10 +155,10 @@ func TestIngenicoTMSFingerprinter_ProbeEndpoint(t *testing.T) {
 
 func TestVerifoneFingerprinter_Match(t *testing.T) {
 	fp := &VerifoneFingerprinter{}
-	assert.True(t, fp.Match(htmlResp(200, "")))
-	assert.True(t, fp.Match(htmlResp(302, "")))
-	assert.False(t, fp.Match(htmlResp(401, "")))
-	assert.False(t, fp.Match(htmlResp(404, "")))
+	assert.True(t, fp.Match(htmlResp(200)))
+	assert.True(t, fp.Match(htmlResp(302)))
+	assert.False(t, fp.Match(htmlResp(401)))
+	assert.False(t, fp.Match(htmlResp(404)))
 	assert.False(t, fp.Match(&http.Response{StatusCode: 200, Header: http.Header{"Content-Type": []string{"application/json"}}}))
 	assert.False(t, fp.Match(&http.Response{StatusCode: 500, Header: http.Header{"Content-Type": []string{"text/html"}}}))
 	assert.False(t, fp.Match(headerResp(302, http.Header{"Location": []string{"/VHQ.Authentication.VHQFederationV1/Account/Login"}})))
@@ -173,14 +166,14 @@ func TestVerifoneFingerprinter_Match(t *testing.T) {
 
 func TestIngenicoFingerprinter_Match(t *testing.T) {
 	fp := &IngenicoFingerprinter{}
-	assert.True(t, fp.Match(htmlResp(200, "")))
+	assert.True(t, fp.Match(htmlResp(200)))
 	assert.False(t, fp.Match(&http.Response{StatusCode: 200, Header: http.Header{"Content-Type": []string{"text/plain"}}}))
 	assert.False(t, fp.Match(headerResp(302, http.Header{"Location": []string{"/emgui/resetPassword.jsp"}})))
 }
 
 func TestVerifoneFingerprinter_LiveVHQIdentifiesAndEmits(t *testing.T) {
 	fp := &VerifoneFingerprinter{}
-	resp := htmlResp(200, verifoneVHQFixture)
+	resp := htmlResp(200)
 	require.True(t, fp.Match(resp))
 	result, err := fp.Fingerprint(resp, []byte(verifoneVHQFixture))
 	require.NoError(t, err)
@@ -196,7 +189,7 @@ func TestVerifoneFingerprinter_LiveVHQIdentifiesAndEmits(t *testing.T) {
 
 func TestIngenicoFingerprinter_LiveEstateIdentifiesAndEmits(t *testing.T) {
 	fp := &IngenicoFingerprinter{}
-	resp := htmlResp(200, ingenicoEstateFixture)
+	resp := htmlResp(200)
 	require.True(t, fp.Match(resp))
 	result, err := fp.Fingerprint(resp, []byte(ingenicoEstateFixture))
 	require.NoError(t, err)
@@ -212,7 +205,7 @@ func TestIngenicoFingerprinter_LiveEstateIdentifiesAndEmits(t *testing.T) {
 
 func TestIngenicoFingerprinter_LiveTMSIdentifiesAndEmits(t *testing.T) {
 	fp := &IngenicoTMSFingerprinter{}
-	result, err := fp.Fingerprint(htmlResp(200, ingenicoTMSFixture), []byte(ingenicoTMSFixture))
+	result, err := fp.Fingerprint(htmlResp(200), []byte(ingenicoTMSFixture))
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	assert.Equal(t, "ingenico-tms", result.Technology)
@@ -222,8 +215,8 @@ func TestIngenicoFingerprinter_LiveTMSIdentifiesAndEmits(t *testing.T) {
 }
 
 func TestPOSPOI_IngenicoFingerprintersDoNotCrossMatch(t *testing.T) {
-	estate := htmlResp(200, ingenicoEstateFixture)
-	tms := htmlResp(200, ingenicoTMSFixture)
+	estate := htmlResp(200)
+	tms := htmlResp(200)
 
 	estateOnTMS, err := (&IngenicoTMSFingerprinter{}).Fingerprint(estate, []byte(ingenicoEstateFixture))
 	require.NoError(t, err)
@@ -235,7 +228,7 @@ func TestPOSPOI_IngenicoFingerprintersDoNotCrossMatch(t *testing.T) {
 }
 
 func TestPOSPOI_GenericHTTPDoesNotEmit(t *testing.T) {
-	resp := htmlResp(200, genericApacheFixture)
+	resp := htmlResp(200)
 	nginx := &http.Response{
 		StatusCode: 200,
 		Header:     http.Header{"Server": []string{"nginx"}, "Content-Type": []string{"text/html"}},
@@ -260,42 +253,42 @@ func TestPOSPOI_GenericHTTPDoesNotEmit(t *testing.T) {
 
 func TestPOSPOI_MarketingPageWithoutManagementMarkersDoesNotMatch(t *testing.T) {
 	titleOnly := []byte(`<html><head><title>VHQ</title></head><body><p>Copyright Verifone Systems, Inc.</p></body></html>`)
-	v, err := (&VerifoneFingerprinter{}).Fingerprint(htmlResp(200, string(titleOnly)), titleOnly)
+	v, err := (&VerifoneFingerprinter{}).Fingerprint(htmlResp(200), titleOnly)
 	require.NoError(t, err)
 	assert.Nil(t, v)
 
 	datasheet := []byte(`<html><head><title>Buy Ingenico Telium iCT220</title></head><body><p>Ingenico Telium iCT220 datasheet</p></body></html>`)
-	i, err := (&IngenicoFingerprinter{}).Fingerprint(htmlResp(200, string(datasheet)), datasheet)
+	i, err := (&IngenicoFingerprinter{}).Fingerprint(htmlResp(200), datasheet)
 	require.NoError(t, err)
 	assert.Nil(t, i)
 
-	vm, err := (&VerifoneFingerprinter{}).Fingerprint(htmlResp(200, verifoneMarketingFixture), []byte(verifoneMarketingFixture))
+	vm, err := (&VerifoneFingerprinter{}).Fingerprint(htmlResp(200), []byte(verifoneMarketingFixture))
 	require.NoError(t, err)
 	assert.Nil(t, vm)
 
-	im, err := (&IngenicoFingerprinter{}).Fingerprint(htmlResp(200, ingenicoMarketingFixture), []byte(ingenicoMarketingFixture))
+	im, err := (&IngenicoFingerprinter{}).Fingerprint(htmlResp(200), []byte(ingenicoMarketingFixture))
 	require.NoError(t, err)
 	assert.Nil(t, im)
 }
 
 func TestPOSPOI_UnverifiedStringsDoNotEmit(t *testing.T) {
 	commander := []byte(`<html><head><title>VeriFone Commander</title></head><body><form><input type="password" name="password"></form></body></html>`)
-	v, err := (&VerifoneFingerprinter{}).Fingerprint(htmlResp(200, string(commander)), commander)
+	v, err := (&VerifoneFingerprinter{}).Fingerprint(htmlResp(200), commander)
 	require.NoError(t, err)
 	assert.Nil(t, v)
 
 	configClient := []byte(`<html><head><title>Configuration Client</title></head><body><h1>Verifone Commander</h1><form><input type="password"></form></body></html>`)
-	v2, err := (&VerifoneFingerprinter{}).Fingerprint(htmlResp(200, string(configClient)), configClient)
+	v2, err := (&VerifoneFingerprinter{}).Fingerprint(htmlResp(200), configClient)
 	require.NoError(t, err)
 	assert.Nil(t, v2)
 
 	telium := []byte(`<html><head><title>Ingenico Telium</title></head><body><form><input type="password" name="password"></form></body></html>`)
-	i, err := (&IngenicoFingerprinter{}).Fingerprint(htmlResp(200, string(telium)), telium)
+	i, err := (&IngenicoFingerprinter{}).Fingerprint(htmlResp(200), telium)
 	require.NoError(t, err)
 	assert.Nil(t, i)
 
 	estateExactTitle := []byte(`<html><head><title>The Estate Manager</title></head><body><p>Ingenico</p><form><input type="password"></form></body></html>`)
-	i2, err := (&IngenicoFingerprinter{}).Fingerprint(htmlResp(200, string(estateExactTitle)), estateExactTitle)
+	i2, err := (&IngenicoFingerprinter{}).Fingerprint(htmlResp(200), estateExactTitle)
 	require.NoError(t, err)
 	assert.Nil(t, i2)
 
@@ -352,13 +345,13 @@ func TestPOSPOI_RedirectLocationIsNeverIdentity(t *testing.T) {
 		{
 			name: "verifone catch-all 200 apache on probe path",
 			fp:   &VerifoneFingerprinter{},
-			resp: htmlResp(200, genericApacheFixture),
+			resp: htmlResp(200),
 			body: []byte(genericApacheFixture),
 		},
 		{
 			name: "ingenico catch-all 200 apache on probe path",
 			fp:   &IngenicoFingerprinter{},
-			resp: htmlResp(200, genericApacheFixture),
+			resp: htmlResp(200),
 			body: []byte(genericApacheFixture),
 		},
 		{
