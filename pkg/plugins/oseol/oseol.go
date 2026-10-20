@@ -13,7 +13,10 @@
 // limitations under the License.
 
 // Package oseol detects vendor-unsupported Ubuntu, Debian, RHEL, and CentOS
-// versions from banners and CPE strings Nerva already collects.
+// versions from banners and CPE strings Nerva already collects. Ubuntu HTTP
+// Server headers of the form Apache/x.y.z (Ubuntu) map to the shipping LTS
+// the same way OpenSSH_X.YpZ Ubuntu banners already do. Debian Apache patch
+// versions are not a release id (DSAs rewrite them); Debian needs +debN.
 //
 // End-of-life dates are the end of vendor standard/LTS security maintenance,
 // not paid extras (Ubuntu Pro/ESM, Debian ELTS, RHEL ELS). Sources are cited
@@ -110,16 +113,30 @@ var ubuntuOpenSSH = map[string]string{
 	"9.6": "24.04",
 }
 
+// ubuntuApache maps Apache/x.y.z in an Ubuntu-tagged HTTP Server header to the
+// LTS that shipped that httpd (packages.ubuntu.com apache2, one per LTS).
+// Ubuntu keeps the upstream Server version stable across security updates, so
+// the three-digit version is a release id, unlike Debian where DSAs rewrite it.
+var ubuntuApache = map[string]string{
+	"2.4.7":  "14.04",
+	"2.4.18": "16.04",
+	"2.4.29": "18.04",
+	"2.4.41": "20.04",
+	"2.4.52": "22.04",
+	"2.4.58": "24.04",
+}
+
 var (
-	cpe23OS = regexp.MustCompile(`(?i)cpe:2\.3:o:([^:]+):([^:]+):([^:]+)`)
-	cpe22OS = regexp.MustCompile(`(?i)cpe:/o:([^:]+):([^:]+):([^:]+)`)
-	debVer  = regexp.MustCompile(`(?i)\+deb(\d+)`)
-	elVer   = regexp.MustCompile(`(?i)\.el(\d+)(?:_\d+)?`)
-	ubuntuY = regexp.MustCompile(`(?i)ubuntu(?:0\.)?(?:[ /])?(\d{2}\.\d{2})`)
-	sshOpen = regexp.MustCompile(`(?i)OpenSSH_(\d+\.\d+)p`)
-	centosH = regexp.MustCompile(`(?i)\(CentOS(?: Linux)?(?:[ /](\d+))?\)`)
-	rhelH   = regexp.MustCompile(`(?i)\(Red Hat(?: Enterprise Linux)?(?:[ /](\d+))?\)`)
-	apache  = regexp.MustCompile(`(?i)Apache/(\d+\.\d+\.\d+)`)
+	cpe23OS      = regexp.MustCompile(`(?i)cpe:2\.3:o:([^:]+):([^:]+):([^:]+)`)
+	cpe22OS      = regexp.MustCompile(`(?i)cpe:/o:([^:]+):([^:]+):([^:]+)`)
+	debVer       = regexp.MustCompile(`(?i)\+deb(\d+)`)
+	elVer        = regexp.MustCompile(`(?i)\.el(\d+)(?:_\d+)?`)
+	ubuntuY      = regexp.MustCompile(`(?i)ubuntu(?:0\.)?(?:[ /])?(\d{2}\.\d{2})`)
+	sshOpen      = regexp.MustCompile(`(?i)OpenSSH_(\d+\.\d+)p`)
+	centosH      = regexp.MustCompile(`(?i)\(CentOS(?: Linux)?(?:[ /](\d+))?\)`)
+	rhelH        = regexp.MustCompile(`(?i)\(Red Hat(?: Enterprise Linux)?(?:[ /](\d+))?\)`)
+	apache       = regexp.MustCompile(`(?i)Apache/(\d+\.\d+\.\d+)`)
+	apacheUbuntu = regexp.MustCompile(`(?i)Apache/(\d+\.\d+\.\d+)\s*\(Ubuntu\)`)
 )
 
 // Check returns an os-eol finding when any of the texts identifies a
@@ -153,6 +170,9 @@ func identify(text string) (*release, string) {
 		return rel, ev
 	}
 	if rel, ev := fromUbuntuSSH(text); rel != nil {
+		return rel, ev
+	}
+	if rel, ev := fromUbuntuApache(text); rel != nil {
 		return rel, ev
 	}
 	if rel, ev := fromHTTPDistro(text); rel != nil {
@@ -268,6 +288,22 @@ func fromUbuntuSSH(text string) (*release, string) {
 		return nil, ""
 	}
 	return rel, strings.TrimSpace(text)
+}
+
+func fromUbuntuApache(text string) (*release, string) {
+	m := apacheUbuntu.FindStringSubmatch(text)
+	if m == nil {
+		return nil, ""
+	}
+	ver, ok := ubuntuApache[m[1]]
+	if !ok {
+		return nil, ""
+	}
+	rel := lookup(familyUbuntu, ver)
+	if rel == nil {
+		return nil, ""
+	}
+	return rel, m[0]
 }
 
 func fromHTTPDistro(text string) (*release, string) {

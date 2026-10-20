@@ -48,6 +48,16 @@ func TestCheck(t *testing.T) {
 			wantID: FindingID,
 		},
 		{
+			name:   "ubuntu1604 apache banner",
+			text:   "Apache/2.4.18 (Ubuntu)",
+			wantID: FindingID,
+		},
+		{
+			name:   "ubuntu2004 apache banner past standard support",
+			text:   "Apache/2.4.41 (Ubuntu)",
+			wantID: FindingID,
+		},
+		{
 			name:   "ubuntu2004 cpe",
 			text:   "cpe:2.3:o:canonical:ubuntu_linux:20.04:*:*:*:*:*:*:*",
 			wantID: FindingID,
@@ -103,8 +113,23 @@ func TestCheck(t *testing.T) {
 			wantNil: true,
 		},
 		{
-			name:    "ubuntu family without version is unidentified",
-			text:    "Apache/2.4.41 (Ubuntu)",
+			name:    "ubuntu2404 apache still in standard support",
+			text:    "Apache/2.4.58 (Ubuntu)",
+			wantNil: true,
+		},
+		{
+			name:    "ubuntu apache version not in lts table is unidentified",
+			text:    "Apache/2.4.10 (Ubuntu)",
+			wantNil: true,
+		},
+		{
+			name:    "apache version without ubuntu token is unidentified",
+			text:    "Apache/2.4.18",
+			wantNil: true,
+		},
+		{
+			name:    "debian apache patch is not a release id",
+			text:    "Apache/2.4.59 (Debian)",
 			wantNil: true,
 		},
 		{

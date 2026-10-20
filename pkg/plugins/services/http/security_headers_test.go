@@ -693,14 +693,24 @@ func TestHTTPPlugin_OSEol_Live(t *testing.T) {
 		t.Fatalf("expected os-eol for CentOS 7 Server header, got %v", eol.SecurityFindings)
 	}
 
+	ubuntuEOL := runHTTPPlugin(t, "HTTP/1.1 200 OK\r\n"+
+		"Content-Type: text/html\r\n"+
+		"Server: Apache/2.4.18 (Ubuntu)\r\n"+
+		"Content-Length: 39\r\n"+
+		"Connection: close\r\n\r\n"+
+		body)
+	if findFinding(ubuntuEOL.SecurityFindings, "os-eol") == nil {
+		t.Fatalf("expected os-eol for Ubuntu 16.04 Apache Server header, got %v", ubuntuEOL.SecurityFindings)
+	}
+
 	supported := runHTTPPlugin(t, "HTTP/1.1 200 OK\r\n"+
 		"Content-Type: text/html\r\n"+
-		"Server: Apache/2.4.41 (Ubuntu)\r\n"+
+		"Server: Apache/2.4.58 (Ubuntu)\r\n"+
 		"Content-Length: 39\r\n"+
 		"Connection: close\r\n\r\n"+
 		body)
 	if findFinding(supported.SecurityFindings, "os-eol") != nil {
-		t.Fatalf("did not expect os-eol for versionless Ubuntu Server header, got %v", supported.SecurityFindings)
+		t.Fatalf("did not expect os-eol for Ubuntu 24.04 Apache Server header, got %v", supported.SecurityFindings)
 	}
 }
 
