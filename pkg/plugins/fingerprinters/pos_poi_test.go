@@ -204,7 +204,8 @@ func TestIngenicoFingerprinter_LiveEstateIdentifiesAndEmits(t *testing.T) {
 	assert.Equal(t, "ingenico", result.Technology)
 	assert.Equal(t, "Estate Manager", result.Metadata["product"])
 	require.NotEmpty(t, result.CPEs)
-	assert.Contains(t, result.CPEs[0], "estate_manager")
+	assert.Contains(t, result.CPEs, ingenicoEstateCPE)
+	assert.Contains(t, result.CPEs, ingenicoEstateCPEAlias)
 	require.Len(t, result.SecurityFindings, 1)
 	assert.Equal(t, posPOIManagementFindingID, result.SecurityFindings[0].ID)
 }
@@ -214,10 +215,23 @@ func TestIngenicoFingerprinter_LiveTMSIdentifiesAndEmits(t *testing.T) {
 	result, err := fp.Fingerprint(htmlResp(200, ingenicoTMSFixture), []byte(ingenicoTMSFixture))
 	require.NoError(t, err)
 	require.NotNil(t, result)
-	assert.Equal(t, "ingenico", result.Technology)
+	assert.Equal(t, "ingenico-tms", result.Technology)
 	assert.Equal(t, "TMS", result.Metadata["product"])
 	assert.Contains(t, result.CPEs[0], ":tms:")
 	assert.Equal(t, posPOIManagementFindingID, result.SecurityFindings[0].ID)
+}
+
+func TestPOSPOI_IngenicoFingerprintersDoNotCrossMatch(t *testing.T) {
+	estate := htmlResp(200, ingenicoEstateFixture)
+	tms := htmlResp(200, ingenicoTMSFixture)
+
+	estateOnTMS, err := (&IngenicoTMSFingerprinter{}).Fingerprint(estate, []byte(ingenicoEstateFixture))
+	require.NoError(t, err)
+	assert.Nil(t, estateOnTMS)
+
+	tmsOnEstate, err := (&IngenicoFingerprinter{}).Fingerprint(tms, []byte(ingenicoTMSFixture))
+	require.NoError(t, err)
+	assert.Nil(t, tmsOnEstate)
 }
 
 func TestPOSPOI_GenericHTTPDoesNotEmit(t *testing.T) {

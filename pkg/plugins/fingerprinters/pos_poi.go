@@ -60,9 +60,11 @@ import (
 const (
 	posPOIMaxBodySize         = 1 << 20
 	posPOIManagementFindingID = "pos-poi-management-exposed"
-	verifoneCPE               = "cpe:2.3:a:verifone:vhq:*:*:*:*:*:*:*:*"
-	ingenicoEstateCPE         = "cpe:2.3:a:ingenico:estate_manager:*:*:*:*:*:*:*:*"
-	ingenicoTMSCPE            = "cpe:2.3:a:ingenico:tms:*:*:*:*:*:*:*:*"
+	verifoneCPE = "cpe:2.3:a:verifone:vhq:*:*:*:*:*:*:*:*"
+	// NVD CVE-2024-6059 uses ingenico:estate_management; CISA-ADP also lists estate_manager.
+	ingenicoEstateCPE      = "cpe:2.3:a:ingenico:estate_management:*:*:*:*:*:*:*:*"
+	ingenicoEstateCPEAlias = "cpe:2.3:a:ingenico:estate_manager:*:*:*:*:*:*:*:*"
+	ingenicoTMSCPE         = "cpe:2.3:a:ingenico:tms:*:*:*:*:*:*:*:*"
 	verifoneProbePath         = "/VHQ.Authentication.VHQFederationV1/Account/Login"
 	ingenicoProbePath         = "/emgui/resetPassword.jsp"
 	ingenicoTMSProbePath      = "/extranet/login.sm"
@@ -164,14 +166,18 @@ func verifoneIdentity(bodyStr string) (evidence string, ok bool) {
 	return "Verifone VHQ management HTML identity", true
 }
 
-func ingenicoIdentity(bodyStr string) (evidence string, product, cpe string, ok bool) {
+func ingenicoEstateIdentity(bodyStr string) (evidence string, ok bool) {
 	if ingenicoEstateTitle.MatchString(bodyStr) && ingenicoBody.MatchString(bodyStr) && managementUIMarker.MatchString(bodyStr) {
-		return "Ingenico Estate Management HTML identity", "Estate Manager", ingenicoEstateCPE, true
+		return "Ingenico Estate Management HTML identity", true
 	}
+	return "", false
+}
+
+func ingenicoTMSIdentity(bodyStr string) (evidence string, ok bool) {
 	if ingenicoTMSTitle.MatchString(bodyStr) && ingenicoBody.MatchString(bodyStr) && managementUIMarker.MatchString(bodyStr) {
-		return "Ingenico TMS Web Access HTML identity", "TMS", ingenicoTMSCPE, true
+		return "Ingenico TMS Web Access HTML identity", true
 	}
-	return "", "", "", false
+	return "", false
 }
 
 func (f *VerifoneFingerprinter) Fingerprint(resp *http.Response, body []byte) (*FingerprintResult, error) {
@@ -194,30 +200,44 @@ func (f *VerifoneFingerprinter) Fingerprint(resp *http.Response, body []byte) (*
 	}, nil
 }
 
-func fingerprintIngenico(resp *http.Response, body []byte) (*FingerprintResult, error) {
-	if !posPOIHTML(resp) {
+func (f *IngenicoFingerprinter) Fingerprint(resp *http.Response, body []byte) (*FingerprintResult, error) {
+	if !f.Match(resp) {
 		return nil, nil
 	}
-	evidence, product, cpe, ok := ingenicoIdentity(capBody(body))
+	evidence, ok := ingenicoEstateIdentity(capBody(body))
 	if !ok {
 		return nil, nil
 	}
 	return &FingerprintResult{
 		Technology: "ingenico",
 		Version:    "",
-		CPEs:       []string{cpe},
+		CPEs:       []string{ingenicoEstateCPE, ingenicoEstateCPEAlias},
 		Metadata: map[string]any{
 			"vendor":  "Ingenico",
-			"product": product,
+			"product": "Estate Manager",
 		},
 		SecurityFindings: []plugins.SecurityFinding{posPOIFinding(evidence)},
 	}, nil
 }
 
-func (f *IngenicoFingerprinter) Fingerprint(resp *http.Response, body []byte) (*FingerprintResult, error) {
-	return fingerprintIngenico(resp, body)
-}
-
 func (f *IngenicoTMSFingerprinter) Fingerprint(resp *http.Response, body []byte) (*FingerprintResult, error) {
-	return fingerprintIngenico(resp, body)
+	if !f.Match(resp) {
+		return nil, nil
+	}
+	evidence, ok := ingenicoTMSIdentity(capBody(body))
+	if !ok {
+		return nil, nil
+	}
+	// Distinct Technology avoids fingerprintMetadata overwrite with Estate
+	// (http.go keys metadata by Technology; veeam.go uses the same split).
+	return &FingerprintResult{
+		Technology: "ingenico-tms",
+		Version:    "",
+		CPEs:       []string{ingenicoTMSCPE},
+		Metadata: map[string]any{
+			"vendor":  "Ingenico",
+			"product": "TMS",
+		},
+		SecurityFindings: []plugins.SecurityFinding{posPOIFinding(evidence)},
+	}, nil
 }
