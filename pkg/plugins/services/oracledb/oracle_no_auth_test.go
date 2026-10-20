@@ -365,3 +365,22 @@ func TestCanSelfDialOracle(t *testing.T) {
 	assert.Nil(t, oracleDialTCP(plugins.Target{Address: unspec}))
 	assert.NotNil(t, oracleDialTCP(plugins.Target{Address: ok}))
 }
+
+func TestRecvTNSReadsSplitFrame(t *testing.T) {
+	pkt := authSessionIDDataPacket()
+	if len(pkt) < 10 {
+		t.Fatalf("session packet too short: %d", len(pkt))
+	}
+	client, server := net.Pipe()
+	defer client.Close()
+	defer server.Close()
+	go func() {
+		_, _ = server.Write(pkt[:5])
+		_, _ = server.Write(pkt[5:])
+	}()
+	got, err := recvTNS(client, 2*time.Second)
+	if err != nil {
+		t.Fatalf("recvTNS: %v", err)
+	}
+	assert.True(t, emptyCredentialSessionSucceeded(got))
+}

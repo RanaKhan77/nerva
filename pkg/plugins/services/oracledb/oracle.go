@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"io"
 	"net"
 	"regexp"
 	"strconv"
@@ -570,8 +571,31 @@ func emptyCredentialSessionSucceeded(response []byte) bool {
 	return bytes.Contains(response, []byte("AUTH_SESSION_ID"))
 }
 
+func recvTNS(conn net.Conn, timeout time.Duration) ([]byte, error) {
+	if err := conn.SetReadDeadline(time.Now().Add(timeout)); err != nil {
+		return nil, err
+	}
+	hdr := make([]byte, 8)
+	if _, err := io.ReadFull(conn, hdr); err != nil {
+		return nil, err
+	}
+	length := int(binary.BigEndian.Uint16(hdr[0:2]))
+	if length < 8 || length > 32*1024 {
+		return nil, io.ErrUnexpectedEOF
+	}
+	pkt := make([]byte, length)
+	copy(pkt, hdr)
+	if _, err := io.ReadFull(conn, pkt[8:]); err != nil {
+		return nil, err
+	}
+	return pkt, nil
+}
+
 func sendTNS(conn net.Conn, pkt []byte, timeout time.Duration) ([]byte, bool) {
-	response, err := utils.SendRecv(conn, pkt, timeout)
+	if err := utils.Send(conn, pkt, timeout); err != nil {
+		return nil, false
+	}
+	response, err := recvTNS(conn, timeout)
 	if err != nil || len(response) == 0 {
 		return nil, false
 	}
