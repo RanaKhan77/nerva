@@ -60,11 +60,11 @@ import (
 const (
 	posPOIMaxBodySize         = 1 << 20
 	posPOIManagementFindingID = "pos-poi-management-exposed"
-	verifoneCPE = "cpe:2.3:a:verifone:vhq:*:*:*:*:*:*:*:*"
+	verifoneCPE               = "cpe:2.3:a:verifone:vhq:*:*:*:*:*:*:*:*"
 	// NVD CVE-2024-6059 uses ingenico:estate_management; CISA-ADP also lists estate_manager.
-	ingenicoEstateCPE      = "cpe:2.3:a:ingenico:estate_management:*:*:*:*:*:*:*:*"
-	ingenicoEstateCPEAlias = "cpe:2.3:a:ingenico:estate_manager:*:*:*:*:*:*:*:*"
-	ingenicoTMSCPE         = "cpe:2.3:a:ingenico:tms:*:*:*:*:*:*:*:*"
+	ingenicoEstateCPE         = "cpe:2.3:a:ingenico:estate_management:*:*:*:*:*:*:*:*"
+	ingenicoEstateCPEAlias    = "cpe:2.3:a:ingenico:estate_manager:*:*:*:*:*:*:*:*"
+	ingenicoTMSCPE            = "cpe:2.3:a:ingenico:tms:*:*:*:*:*:*:*:*"
 	verifoneProbePath         = "/VHQ.Authentication.VHQFederationV1/Account/Login"
 	ingenicoProbePath         = "/emgui/resetPassword.jsp"
 	ingenicoTMSProbePath      = "/extranet/login.sm"
