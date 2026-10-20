@@ -150,7 +150,7 @@ func Check(texts ...string) *plugins.SecurityFinding {
 		if rel, evidence := identify(text); rel != nil && !now().Before(rel.eol) {
 			return &plugins.SecurityFinding{
 				ID:          FindingID,
-				Severity:    plugins.SeverityHigh,
+				Severity:    plugins.SeverityLow,
 				Description: fmt.Sprintf("Host is running vendor-unsupported OS: %s", rel.name),
 				Evidence:    evidence,
 			}

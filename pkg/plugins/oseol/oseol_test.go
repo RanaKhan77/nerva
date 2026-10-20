@@ -169,8 +169,8 @@ func TestCheck(t *testing.T) {
 			if got.ID != tt.wantID {
 				t.Errorf("ID = %q, want %q", got.ID, tt.wantID)
 			}
-			if got.Severity != plugins.SeverityHigh {
-				t.Errorf("Severity = %q, want %q", got.Severity, plugins.SeverityHigh)
+			if got.Severity != plugins.SeverityLow {
+				t.Errorf("Severity = %q, want %q", got.Severity, plugins.SeverityLow)
 			}
 			if got.Evidence == "" {
 				t.Error("Evidence is empty")
