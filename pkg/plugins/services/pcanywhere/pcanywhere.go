@@ -165,7 +165,25 @@ func (p *PcAnywhereUDPPlugin) Run(conn net.Conn, timeout time.Duration, target p
 	if err := checkPcAnywhereUDP(response); err != nil {
 		return nil, nil
 	}
-	return emitService(target, plugins.UDP, "udp=NR"), nil
+	evidence := "udp=NR"
+	if name := udpReplyName(response); name != "" {
+		evidence = "udp=NR host=" + name
+	}
+	return emitService(target, plugins.UDP, evidence), nil
+}
+
+func udpReplyName(data []byte) string {
+	const marker = "AHM_3___"
+	idx := bytes.Index(data, []byte(marker))
+	if idx < 2 {
+		return ""
+	}
+	mid := data[2:idx]
+	n := 0
+	for n < len(mid) && mid[n] != '_' {
+		n++
+	}
+	return string(mid[:n])
 }
 
 func (p *PcAnywhereUDPPlugin) Name() string { return PCANYWHERE }

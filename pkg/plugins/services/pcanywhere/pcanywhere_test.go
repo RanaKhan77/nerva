@@ -153,6 +153,28 @@ func TestPcAnywhereUDPPlugin_Run_StatusHandshake(t *testing.T) {
 	assert.NotNil(t, service)
 	assert.Equal(t, plugins.ProtoPcAnywhere, service.Protocol)
 	assert.Equal(t, "pcanywhere-exposed", service.SecurityFindings[0].ID)
+	assert.Equal(t, "udp=NR host=HOST", service.SecurityFindings[0].Evidence)
+}
+
+func TestPcAnywhereUDPPlugin_Run_HTTPBanner_NoFinding(t *testing.T) {
+	conn := &mockConn{readData: []byte("HTTP/1.1 200 OK")}
+	plugin := &PcAnywhereUDPPlugin{}
+	target := plugins.Target{
+		Address:    netip.MustParseAddrPort("192.0.2.1:5632"),
+		Misconfigs: true,
+	}
+	service, err := plugin.Run(conn, time.Second, target)
+	assert.NoError(t, err)
+	assert.Nil(t, service)
+}
+
+func TestPcAnywhereUDPPlugin_Run_EmptyResponse(t *testing.T) {
+	conn := &mockConn{readData: []byte{}}
+	plugin := &PcAnywhereUDPPlugin{}
+	target := plugins.Target{Address: netip.MustParseAddrPort("192.0.2.1:5632")}
+	service, err := plugin.Run(conn, time.Second, target)
+	assert.NoError(t, err)
+	assert.Nil(t, service)
 }
 
 func TestPcAnywherePlugin_PortPriority(t *testing.T) {
