@@ -232,6 +232,13 @@ var findingCatalog = map[string]FindingMeta{
 		Recommendation: "Require database authentication and disable empty-credential logins. Restrict the TNS listener to trusted network interfaces.",
 		CVSS:           "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:L/A:N",
 	},
+	"mssql-default-creds": {
+		Title:          "MSSQL sa Default Blank Password",
+		Severity:       SeverityMedium,
+		Impact:         "The sa account accepts a blank password, the documented mixed-mode default on SQL Server 2000/MSDE. Successful login grants administrative access to databases and stored data.",
+		Recommendation: "Set a strong sa password and enable CHECK_POLICY. Prefer Windows Authentication. Restrict network access to trusted clients.",
+		CVSS:           "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:L/A:N",
+	},
 	"cassandra-no-auth": {
 		Title:          "Cassandra Accessible Without Authentication",
 		Severity:       SeverityMedium,
