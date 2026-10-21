@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - CLI-surface drift gate: `make cli-docs` regenerates `docs/CLI.md` and `docs/cli-surface.json` from the live cobra tree; CI fails when documentation drifts (ENG-8010).
-- Citrix ADC management-plane HTTP fingerprinters: `/menu/neo` GUI and `/nitro/v1/config` NITRO API, distinct from Gateway/AAA (`citrix-netscaler`). Emits `citrix-adc-admin-panel-exposed` (High) when the admin plane is reachable.
+- Citrix ADC management-plane HTTP fingerprinters: `/menu/neo` GUI and `/nitro/v1/config` NITRO API, distinct from Gateway/AAA (`citrix-netscaler`). Emits `citrix-adc-admin-panel-exposed` (Medium) when the admin plane is reachable.
 
 - Azure App Service Kudu (SCM) HTTP fingerprinter: detects `/DebugConsole` via Basic `realm="site"`, App Service AAD SSO, or unauthenticated Kudu console markup. Emits `kudu-unauthenticated-console` (Critical) and `kudu-unauthenticated-api` for unauthenticated `/api/processes` (the attach path for Visual Studio remote debugging).
 

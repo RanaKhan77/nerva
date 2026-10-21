@@ -433,8 +433,8 @@ var findingCatalog = map[string]FindingMeta{
 	},
 	"citrix-adc-admin-panel-exposed": {
 		Title:          "Citrix ADC Management Interface Exposed",
-		Severity:       SeverityHigh,
-		Impact:         "The Citrix ADC / NetScaler management plane (NITRO API and/or configuration GUI) is reachable on this service. This is distinct from the Gateway or AAA user portal. Management-plane vulnerabilities are routinely exploited against internet-facing ADCs and can yield appliance takeover.",
+		Severity:       SeverityMedium,
+		Impact:         "The Citrix ADC / NetScaler management plane (NITRO API and/or configuration GUI) is reachable on this service, distinct from the Gateway or AAA user portal. This expands the attack surface for credential attacks and management-plane CVEs; it is not by itself unauthenticated compromise.",
 		Recommendation: "Bind the management GUI and NITRO API to the NSIP or a dedicated management SNIP. Do not expose /nitro, /menu/neo, or /ns_gui on internet-facing virtual servers. Restrict management access to trusted administration networks.",
 		CVSS:           "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N",
 	},

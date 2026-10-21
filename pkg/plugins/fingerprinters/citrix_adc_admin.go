@@ -196,10 +196,10 @@ func citrixADCAdminResult(detection, evidence string) *FingerprintResult {
 			"interface_type":   "management",
 			"detection_method": detection,
 		},
-		Severity: plugins.SeverityHigh,
+		Severity: plugins.SeverityMedium,
 		SecurityFindings: []plugins.SecurityFinding{{
 			ID:          citrixADCAdminFindingID,
-			Severity:    plugins.SeverityHigh,
+			Severity:    plugins.SeverityMedium,
 			Description: "Citrix ADC / NetScaler management plane (configuration GUI or NITRO API) is reachable on this service, distinct from the Gateway or AAA user portal.",
 			Evidence:    evidence,
 		}},

@@ -68,7 +68,7 @@ func TestCitrixADCAdminFingerprinter_Fingerprint(t *testing.T) {
 	assert.Equal(t, "gui", result.Metadata["detection_method"])
 	require.Len(t, result.SecurityFindings, 1)
 	assert.Equal(t, citrixADCAdminFindingID, result.SecurityFindings[0].ID)
-	assert.Equal(t, plugins.SeverityHigh, result.SecurityFindings[0].Severity)
+	assert.Equal(t, plugins.SeverityMedium, result.SecurityFindings[0].Severity)
 	require.NotEmpty(t, result.CPEs)
 	assert.Contains(t, result.CPEs[0], "citrix:netscaler_application_delivery_controller")
 }
@@ -141,12 +141,12 @@ func TestIsCitrixNITRO(t *testing.T) {
 func TestCitrixADCAdminFinding_CatalogEnrichment(t *testing.T) {
 	f := plugins.SecurityFinding{
 		ID:          citrixADCAdminFindingID,
-		Severity:    plugins.SeverityHigh,
+		Severity:    plugins.SeverityMedium,
 		Description: "Citrix ADC / NetScaler management plane is reachable",
 	}
 	f.Enrich()
 	assert.Equal(t, "Citrix ADC Management Interface Exposed", f.Title)
-	assert.Equal(t, plugins.SeverityHigh, f.Severity)
+	assert.Equal(t, plugins.SeverityMedium, f.Severity)
 	assert.NotEmpty(t, f.Impact)
 	assert.NotEmpty(t, f.Recommendation)
 }
