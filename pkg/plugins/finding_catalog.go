@@ -87,6 +87,21 @@ var findingCatalog = map[string]FindingMeta{
 		Recommendation: "Enable TLS on all HTTP endpoints and redirect plaintext requests to HTTPS.",
 		CVSS:           "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:L/I:N/A:N",
 	},
+	// ── PHP findings ─────────────────────────────────────────────────────
+	"exposed-phpinfo": {
+		Title:          "Exposed phpinfo() page",
+		Severity:       SeverityInfo,
+		Impact:         "A reachable phpinfo() page discloses the exact PHP version and SAPI, the build date, the host operating system and distribution, the full list of loaded extensions, absolute filesystem paths, and the server environment (which frequently carries configuration values and secrets passed via environment variables). This gives an attacker a precise map of the technology stack for targeting known vulnerabilities.",
+		Recommendation: "Remove the phpinfo() page from the web root or restrict access to it, and set expose_php=Off. Treat any phpinfo() output reachable without authentication as sensitive information disclosure.",
+		CVSS:           "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N",
+	},
+	"php-vulnerable-php2shell": {
+		Title:          "PHP affected by php2shell (CVE-2026-109618/109619)",
+		Severity:       SeverityHigh,
+		Impact:         "The detected PHP version is below the php2shell fix line (patched in 8.2.35 / 8.3.36 / 8.4.27 / 8.5.12; every branch at or below 8.1 is end-of-life with no upstream fix). php2shell is a memory-corruption flaw affecting all common SAPIs — mod_php, php-fpm, php-cgi, FrankenPHP, and LiteSpeed — so it is not scoped out by server integration. Exploitability was not validated remotely, and distributions backport fixes onto frozen version strings, so this is a version-inference finding that must be adjudicated against the build date and distribution.",
+		Recommendation: "Update PHP to the fixed release for the branch (8.2.35 / 8.3.36 / 8.4.27 / 8.5.12 or later), or to the distribution-backported package that carries the fix. For end-of-life branches (<= 8.1) migrate to a supported, patched branch.",
+		CVSS:           "CVSS:4.0/AV:N/AC:H/AT:P/PR:N/UI:N/VC:H/VI:H/VA:H/SC:N/SI:N/SA:N",
+	},
 	"http-cleartext-form": {
 		Title:          "Login Form Served Over Cleartext HTTP",
 		Severity:       SeverityLow,
