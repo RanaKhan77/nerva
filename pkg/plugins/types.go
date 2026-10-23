@@ -1056,6 +1056,12 @@ type Target struct {
 	Host       string
 	Misconfigs bool // when true, plugins should populate SecurityFindings
 	Deep       bool // when true, plugins perform additional probes (e.g., admin path discovery)
+	// DialTCP, when non-nil, opens follow-up TCP connections through the scan
+	// engine (proxy-aware). Plugins that need a fresh socket MUST use this
+	// instead of net.DialTimeout. Nil means the caller did not provide an
+	// engine dialer; plugins may fall back to net.DialTimeout only for a
+	// concrete, non-unspecified address (unit tests).
+	DialTCP func(address string, timeout time.Duration) (net.Conn, error)
 }
 
 type Plugin interface {
